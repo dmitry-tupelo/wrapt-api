@@ -1,0 +1,94 @@
+# Локальная инфраструктура для разработки.
+# Запуск: docker compose up -d · Статус: docker compose ps · Остановка: docker compose down
+# Порты открыты только на 127.0.0.1, чтобы сервисы со слабыми dev-паролями не были видны в локальной сети.
+
+services:
+  postgres:
+    image: postgres:18.7
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432" # порт на Маке берётся из .env, по умолчанию 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql # с версии 18 монтируется на уровень выше, чем /data
+    healthcheck:
+      # $$ — переменную подставит shell внутри контейнера, а не Compose при чтении файла
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8.12.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.4.1-management
+    restart: unless-stopped
+    # RabbitMQ хранит данные в папке, названной по имени хоста.
+    # Без фиксированного hostname после пересоздания контейнера данные «теряются».
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:5672:5672" # AMQP — сюда подключаются API и воркер
+      - "127.0.0.1:15672:15672" # веб-панель
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s # стартует медленно; неудачи в первые 20 секунд не считаются
+
+  # S3-совместимое хранилище. В роадмапе был MinIO, но его образы больше не публикуются на Docker Hub.
+  # Приложение работает с ним через AWS SDK, поэтому сервер можно заменить, не меняя код.
+  rustfs:
+    image: rustfs/rustfs:1.0.6
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:9000:9000" # S3 API
+      - "127.0.0.1:9001:9001" # веб-консоль
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP — сюда приложение отправляет письма
+      - "127.0.0.1:8025:8025" # веб-интерфейс с пойманными письмами
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  rustfs_data:

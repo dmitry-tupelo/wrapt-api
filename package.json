@@ -15,6 +15,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/apps/wrapt-api/main",
     "lint": "oxlint --type-aware apps/ libs/",
+    "typecheck": "tsc -p tsconfig.spec.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
