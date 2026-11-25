@@ -60,5 +60,5 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /docs/ROADMAP.md
 
-# Claude Code: личные настройки (общие .claude/settings.json и skills коммитятся)
+# Claude Code: personal settings (shared .claude/settings.json and skills are committed)
 .claude/settings.local.json
